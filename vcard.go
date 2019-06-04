@@ -3,8 +3,13 @@ package vcard
 import (
 	"bytes"
 	"fmt"
+	"image/png"
+	"os"
 	"reflect"
 	"strings"
+
+	"github.com/boombuler/barcode"
+	"github.com/boombuler/barcode/qr"
 )
 
 /*
@@ -93,6 +98,36 @@ func (v *VCard) String() string {
 	}
 	fmt.Fprintf(&b, "\nEND:VCARD")
 	return b.String()
+}
+
+// QR creates a QR code of the VCard
+func (v *VCard) QR(x, y int) (barcode.Barcode, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Create the barcode
+	qrCode, err := qr.Encode(v.String(), qr.M, qr.Auto)
+	if err != nil {
+		return nil, err
+	}
+
+	// Scale the barcode to 200x200 pixels
+	return barcode.Scale(qrCode, x, y)
+}
+
+// QRPng creates a png file containing a QR code of the VCard
+func (v *VCard) QRPng(x, y int, filename string) error {
+	qrCode, err := v.QR(x, y)
+	if err != nil {
+		return err
+	}
+	// create the output file
+	file, _ := os.Create(filename)
+	defer file.Close()
+
+	// encode the barcode as png
+	return png.Encode(file, qrCode)
 }
 
 // VersionError is used to to return an error when the user has selected a wrong version

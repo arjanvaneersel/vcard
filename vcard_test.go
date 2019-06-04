@@ -1,6 +1,7 @@
 package vcard_test
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -29,4 +30,20 @@ func TestNew(t *testing.T) {
 		t.Fatalf("vcard should contain an N field for Test Persom")
 	}
 	t.Log(v)
+}
+
+func TestQRPng(t *testing.T) {
+	filename := "qr.png"
+	defer os.Remove(filename)
+	v, err := vcard.New("4.0",
+		vcard.N{FamilyName: "Person", GivenName: "Test"},
+		vcard.FN{"Test Person"},
+	)
+	if err != nil {
+		t.Fatalf("expected to pass, but got error %v", err)
+	}
+
+	if err := v.QRPng(500, 500, filename); err != nil {
+		t.Fatalf("couldn't generate png: %v", err)
+	}
 }

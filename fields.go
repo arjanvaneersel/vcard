@@ -479,7 +479,9 @@ func (f IMPP) Format(v string) (string, error) {
 	return "", ErrVersion
 }
 
-// IMPP type definition to specify instant messenger handle.
+// Key type definition to specify a key associated with the vCard object.
+// It may point to an external URL, may be plain text, or may be embedded
+// in the vCard as a Base64 encoded block of text.
 type Key struct {
 	Type   string
 	URI    *url.URL
@@ -530,6 +532,22 @@ func (f Key) Format(v string) (string, error) {
 
 		fmt.Fprintf(&b, ";MEDIATYPE=%s:%s", f.Type, f.URI)
 		return b.String(), nil
+	}
+	return "", ErrVersion
+}
+
+// Kind type definition to specify the  the type of entity that this vCard represents:
+// 'application', 'individual', 'group', 'location' or 'organization';
+// 'x-*' values may be used for experimental purposes.
+type Kind struct {
+	Text string
+}
+
+// Format implements the FieldFormatter interface
+func (f Kind) Format(v string) (string, error) {
+	switch v {
+	case "4.0":
+		return fmt.Sprintf("KIND:%s", strings.ToLower(f.Text)), nil
 	}
 	return "", ErrVersion
 }

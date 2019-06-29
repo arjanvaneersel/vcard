@@ -618,3 +618,34 @@ func TestKey(t *testing.T) {
 		}
 	}
 }
+
+func TestKind(t *testing.T) {
+	tt := []struct {
+		version     string
+		text        string
+		expected    string
+		expectedErr error
+	}{
+		{
+			version:  "4.0",
+			text:     "INDIVIDUAL",
+			expected: "KIND:individual",
+		},
+		{
+			version:     "2.1",
+			text:        "INDIVIDUAL",
+			expectedErr: vcard.ErrVersion,
+		},
+	}
+
+	for _, tc := range tt {
+		got, err := vcard.Kind{tc.text}.Format(tc.version)
+		if err != tc.expectedErr {
+			t.Fatalf("expected err %v, but got: %v", tc.expectedErr, err)
+		}
+
+		if got != tc.expected {
+			t.Fatalf("expected %q, but got %q", tc.expected, got)
+		}
+	}
+}

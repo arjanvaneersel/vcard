@@ -544,3 +544,77 @@ func TestIMPP(t *testing.T) {
 		}
 	}
 }
+
+func TestKey(t *testing.T) {
+	uri, _ := url.Parse("http://example.com/key.pgp")
+	tt := []struct {
+		version  string
+		field    vcard.Key
+		expected string
+	}{
+		{
+			"2.1",
+			vcard.Key{
+				Type:   "PGP",
+				Binary: true,
+				Data:   "MIICajCCAdOgAwIBAgICBEUwDQYJKoZIhvcNAQEEBQAwdzELMAkGA1UEBhMCVVMxLDAqBgNVBAoTI05ldHNjYXBlIENvbW11bmljYXRpb25zIENvcnBvcmF0aW9uMRwwGgYDVQQLExNJbmZvcm1hdGlvbiBTeXN0",
+			},
+			"KEY;PGP;ENCODING=BASE64:MIICajCCAdOgAwIBAgICBEUwDQYJKoZIhvcNAQEEBQAwdzELMAkGA1UEBhMCVVMxLDAqBgNVBAoTI05ldHNjYXBlIENvbW11bmljYXRpb25zIENvcnBvcmF0aW9uMRwwGgYDVQQLExNJbmZvcm1hdGlvbiBTeXN0",
+		},
+		{
+			"2.1",
+			vcard.Key{
+				Type: "PGP",
+				URI:  uri,
+			},
+			"KEY;PGP:http://example.com/key.pgp",
+		},
+
+		{
+			"3.0",
+			vcard.Key{
+				Type:   "PGP",
+				Binary: true,
+				Data:   "MIICajCCAdOgAwIBAgICBEUwDQYJKoZIhvcNAQEEBQAwdzELMAkGA1UEBhMCVVMxLDAqBgNVBAoTI05ldHNjYXBlIENvbW11bmljYXRpb25zIENvcnBvcmF0aW9uMRwwGgYDVQQLExNJbmZvcm1hdGlvbiBTeXN0",
+			},
+			"KEY;TYPE=PGP;ENCODING=b:MIICajCCAdOgAwIBAgICBEUwDQYJKoZIhvcNAQEEBQAwdzELMAkGA1UEBhMCVVMxLDAqBgNVBAoTI05ldHNjYXBlIENvbW11bmljYXRpb25zIENvcnBvcmF0aW9uMRwwGgYDVQQLExNJbmZvcm1hdGlvbiBTeXN0",
+		},
+		{
+			"3.0",
+			vcard.Key{
+				Type: "PGP",
+				URI:  uri,
+			},
+			"KEY;TYPE=PGP:http://example.com/key.pgp",
+		},
+
+		{
+			"4.0",
+			vcard.Key{
+				Type:   "application/pgp-keys",
+				Binary: true,
+				Data:   "MIICajCCAdOgAwIBAgICBEUwDQYJKoZIhvcNAQEEBQAwdzELMAkGA1UEBhMCVVMxLDAqBgNVBAoTI05ldHNjYXBlIENvbW11bmljYXRpb25zIENvcnBvcmF0aW9uMRwwGgYDVQQLExNJbmZvcm1hdGlvbiBTeXN0",
+			},
+			"KEY:data:application/pgp-keys;base64,MIICajCCAdOgAwIBAgICBEUwDQYJKoZIhvcNAQEEBQAwdzELMAkGA1UEBhMCVVMxLDAqBgNVBAoTI05ldHNjYXBlIENvbW11bmljYXRpb25zIENvcnBvcmF0aW9uMRwwGgYDVQQLExNJbmZvcm1hdGlvbiBTeXN0",
+		},
+		{
+			"4.0",
+			vcard.Key{
+				Type: "application/pgp-keys",
+				URI:  uri,
+			},
+			"KEY;MEDIATYPE=application/pgp-keys:http://example.com/key.pgp",
+		},
+	}
+
+	for _, tc := range tt {
+		got, err := tc.field.Format(tc.version)
+		if err != nil {
+			t.Fatalf("expected to pass, but got: %v", err)
+		}
+
+		if got != tc.expected {
+			t.Fatalf("expected %q, but got %q", tc.expected, got)
+		}
+	}
+}

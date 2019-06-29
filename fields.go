@@ -478,3 +478,58 @@ func (f IMPP) Format(v string) (string, error) {
 	}
 	return "", ErrVersion
 }
+
+// IMPP type definition to specify instant messenger handle.
+type Key struct {
+	Type   string
+	URI    *url.URL
+	Data   string
+	Binary bool
+}
+
+// Format implements the FieldFormatter interface
+func (f Key) Format(v string) (string, error) {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "KEY")
+
+	switch v {
+	case "2.1":
+		if len(f.Data) > 0 {
+			encoding := ""
+			if f.Binary {
+				encoding = ";ENCODING=BASE64"
+			}
+			fmt.Fprintf(&b, ";%s%s:%s", f.Type, encoding, f.Data)
+			return b.String(), nil
+		}
+
+		fmt.Fprintf(&b, ";%s:%s", f.Type, f.URI)
+		return b.String(), nil
+
+	case "3.0":
+		if len(f.Data) > 0 {
+			encoding := ""
+			if f.Binary {
+				encoding = ";ENCODING=b"
+			}
+			fmt.Fprintf(&b, ";TYPE=%s%s:%s", f.Type, encoding, f.Data)
+			return b.String(), nil
+		}
+
+		fmt.Fprintf(&b, ";TYPE=%s:%s", f.Type, f.URI)
+		return b.String(), nil
+	case "4.0":
+		if len(f.Data) > 0 {
+			encoding := ""
+			if f.Binary {
+				encoding = "base64,"
+			}
+			fmt.Fprintf(&b, ":data:%s;%s%s", f.Type, encoding, f.Data)
+			return b.String(), nil
+		}
+
+		fmt.Fprintf(&b, ";MEDIATYPE=%s:%s", f.Type, f.URI)
+		return b.String(), nil
+	}
+	return "", ErrVersion
+}

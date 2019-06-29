@@ -2,19 +2,23 @@ package vcard
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 )
 
-// FieldFormatter is an interface containing the minimal behaviour of any VCard field formatter
-type FieldFormatter interface {
-	// Every FieldFormatter needs to implement the Stringer interface
-	fmt.Stringer
+const (
+	dateFormat     = "20060102"
+	dateTimeFormat = "20060102T150405Z0700"
+)
 
-	// Versions returns a slice containing which VCard versions this field supports
-	Versions() []string
+// FieldFormatter is an interface containing the minimal behaviour of any VCard field formatter
+// Receives the version as a string, returns a formatted string and an error
+// Current versions to support are 2.1, 3.0 and 4,0
+type FieldFormatter interface {
+	Format(string) (string, error)
 }
 
 // BEGIN:VCARD
@@ -33,6 +37,9 @@ type FieldFormatter interface {
 // x-qq:21588891
 // END:VCARD
 
+// ErrVersion is used by FieldFormatters when a request is made for an unsupported vcard version
+var ErrVersion = errors.New("unsupported verson")
+
 // N type definition to specify the components of the name of the object the vCard represents
 type N struct {
 	FamilyName        string
@@ -42,20 +49,19 @@ type N struct {
 	HonorificSuffixes string
 }
 
-// String implements the Stringer interface
-func (f N) String() string {
-	return fmt.Sprintf("N:%s;%s;%s;%s;%s",
-		f.FamilyName,
-		f.GivenName,
-		f.AdditionalNames,
-		f.HonorificPrefixes,
-		f.HonorificSuffixes,
-	)
-}
-
-// Versions implements the FieldFormatter interface.
-func (f N) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+// Format implements the FieldFormatter interface
+func (f N) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		return fmt.Sprintf("N:%s;%s;%s;%s;%s",
+			f.FamilyName,
+			f.GivenName,
+			f.AdditionalNames,
+			f.HonorificPrefixes,
+			f.HonorificSuffixes,
+		), nil
+	}
+	return "", ErrVersion
 }
 
 // FN type definition to specify the formatted text corresponding to the name of the object the vCard represents.
@@ -63,14 +69,13 @@ type FN struct {
 	FormattedName string
 }
 
-// String implements the Stringer interface
-func (f FN) String() string {
-	return fmt.Sprintf("FN:%s", f.FormattedName)
-}
-
-// Versions implements the FieldFormatter interface
-func (f FN) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+// Format implements the FieldFormatter interface
+func (f FN) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		return fmt.Sprintf("FN:%s", f.FormattedName), nil
+	}
+	return "", ErrVersion
 }
 
 // Org type definition to specify the organizational name and units associated with the vCard.
@@ -79,18 +84,17 @@ type Org struct {
 	Units []string
 }
 
-// String implements the Stringer interface
-func (f Org) String() string {
-	l := fmt.Sprintf("ORG:%s", f.Name)
-	if len(f.Units) > 0 {
-		l = fmt.Sprintf("%s;%s", l, strings.Join(f.Units, ";"))
+// Format implements the FieldFormatter interface
+func (f Org) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		l := fmt.Sprintf("ORG:%s", f.Name)
+		if len(f.Units) > 0 {
+			l = fmt.Sprintf("%s;%s", l, strings.Join(f.Units, ";"))
+		}
+		return l, nil
 	}
-	return l
-}
-
-// Versions implements the FieldFormatter interface
-func (f Org) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+	return "", ErrVersion
 }
 
 // Title type definition to specify the job title, functional position or function of the object the vCard represents.
@@ -98,14 +102,13 @@ type Title struct {
 	Title string
 }
 
-// String implements the Stringer interface
-func (f Title) String() string {
-	return fmt.Sprintf("TITLE:%s", f.Title)
-}
-
-// Versions implements the FieldFormatter interface
-func (f Title) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+// Format implements the FieldFormatter interface
+func (f Title) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		return fmt.Sprintf("TITLE:%s", f.Title), nil
+	}
+	return "", ErrVersion
 }
 
 // Role type definition to specify information concerning the role, occupation,
@@ -114,44 +117,70 @@ type Role struct {
 	Role string
 }
 
-// String implements the Stringer interface
-func (f Role) String() string {
-	return fmt.Sprintf("ROLE:%s", f.Role)
+// Format implements the FieldFormatter interface
+func (f Role) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		return fmt.Sprintf("ROLE:%s", f.Role), nil
+	}
+	return "", ErrVersion
 }
 
-// Versions implements the FieldFormatter interface
-func (f Role) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+func mediaString(v, field, tp, b64 string, uri *url.URL) (string, error) {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, field)
+
+	switch v {
+	case "2.1":
+		if tp != "" {
+			fmt.Fprintf(&b, ";%s", tp)
+		}
+		if len(b64) != 0 {
+			fmt.Fprintf(&b, ";ENCODING=BASE64:%s", b64)
+			return b.String(), nil
+		}
+
+		fmt.Fprintf(&b, ":%s", uri)
+		return b.String(), nil
+
+	case "3.0":
+		if tp != "" {
+			fmt.Fprintf(&b, ";TYPE=%s", tp)
+		}
+
+		if len(b64) > 0 {
+			fmt.Fprintf(&b, ";ENCODING=b:%s", b64)
+			return b.String(), nil
+		}
+
+		fmt.Fprintf(&b, ";VALUE=uri:%s", uri)
+		return b.String(), nil
+	case "4.0":
+		if len(b64) != 0 {
+			fmt.Fprintf(&b, ":data:%s;base64,%s", tp, b64)
+			return b.String(), nil
+		}
+
+		if tp != "" {
+			fmt.Fprintf(&b, ";MEDIATYPE=%s", tp)
+		}
+		fmt.Fprintf(&b, ":%s", uri)
+		return b.String(), nil
+	}
+	return "", ErrVersion
 }
 
 // Photo type definition to specify an image or photograph information that
 // annotates some aspect of the object the vCard represents.
 type Photo struct {
-	Type   string
-	URL    *url.URL
-	Binary bool
-	Data   []byte
+	Type       string
+	URI        *url.URL
+	Base64Data string
 }
 
-// String implements the Stringer interface
-func (f Photo) String() string {
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "PHOTO")
-	if f.Binary {
-		fmt.Fprintf(&b, ";ENCODING=b;TYPE=%s:%s", f.Type, f.Data)
-		return b.String()
-	}
-
-	if f.Type != "" {
-		fmt.Fprintf(&b, ";TYPE=%s", f.Type)
-	}
-	fmt.Fprintf(&b, ";VALUE=uri:%s", f.URL.String())
-	return b.String()
-}
-
-// Versions implements the FieldFormatter interface
-func (f Photo) Versions() []string {
-	return []string{"4.0"}
+// Format implements the FieldFormatter interface
+func (f Photo) Format(v string) (string, error) {
+	return mediaString(v, "PHOTO", f.Type, f.Base64Data, f.URI)
 }
 
 const (
@@ -204,18 +233,17 @@ type Tel struct {
 	Number string
 }
 
-// String implements the Stringer interface
-func (f Tel) String() string {
-	t := strings.Join(f.Types, ",")
-	if t == "" {
-		t = TelVoice
+// Format implements the FieldFormatter interface
+func (f Tel) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		t := strings.Join(f.Types, ",")
+		if t == "" {
+			t = TelVoice
+		}
+		return fmt.Sprintf("TEL;TYPE=%s:%s", t, f.Number), nil
 	}
-	return fmt.Sprintf("TEL;TYPE=%s:%s", t, f.Number)
-}
-
-// Versions implements the FieldFormatter interface
-func (f Tel) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+	return "", ErrVersion
 }
 
 const (
@@ -253,27 +281,26 @@ type Adr struct {
 	CountryName     string
 }
 
-// String implements the Stringer interface
-func (f Adr) String() string {
-	t := strings.Join(f.Types, ",")
-	if t == "" {
-		t = "intl,postal,parcel,work"
+// Format implements the FieldFormatter interface
+func (f Adr) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		t := strings.Join(f.Types, ",")
+		if t == "" {
+			t = "intl,postal,parcel,work"
+		}
+		return fmt.Sprintf("ADR;TYPE=%s:%s;%s;%s;%s;%s;%s;%s",
+			t,
+			f.PostOfficeBox,
+			f.ExtendedAddress,
+			f.StreetAddress,
+			f.Locality,
+			f.Region,
+			f.PostalCode,
+			f.CountryName,
+		), nil
 	}
-	return fmt.Sprintf("ADR;TYPE=%s:%s;%s;%s;%s;%s;%s;%s",
-		t,
-		f.PostOfficeBox,
-		f.ExtendedAddress,
-		f.StreetAddress,
-		f.Locality,
-		f.Region,
-		f.PostalCode,
-		f.CountryName,
-	)
-}
-
-// Versions implements the FieldFormatter interface
-func (f Adr) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+	return "", ErrVersion
 }
 
 const (
@@ -293,38 +320,161 @@ type Email struct {
 	Email string
 }
 
-// String implements the Stringer interface
-func (f Email) String() string {
-	var b bytes.Buffer
-	fmt.Fprint(&b, "EMAIL")
-	if len(f.Types) > 0 {
-		fmt.Fprintf(&b, ";TYPE=%s", strings.Join(f.Types, ","))
+// Format implements the FieldFormatter interface
+func (f Email) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		var b bytes.Buffer
+		fmt.Fprint(&b, "EMAIL")
+		if len(f.Types) > 0 {
+			fmt.Fprintf(&b, ";TYPE=%s", strings.Join(f.Types, ","))
+		}
+		fmt.Fprintf(&b, ":%s", f.Email)
+		return b.String(), nil
 	}
-	fmt.Fprintf(&b, ":%s", f.Email)
-	return b.String()
-}
-
-// Versions implements the FieldFormatter interface
-func (f Email) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+	return "", ErrVersion
 }
 
 // Rev type definition to specify revision information about the current vCard.
 type Rev struct {
-	Timestamp time.Time
-	Format    string
+	Timestamp  time.Time
+	TimeFormat string
 }
 
-// String implements the Stringer interface
-func (f Rev) String() string {
-	format := "20060102T150405Z0700"
-	if f.Format != "" {
-		format = f.Format
+// Format implements the FieldFormatter interface
+func (f Rev) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		format := dateTimeFormat
+		if f.TimeFormat != "" {
+			format = f.TimeFormat
+		}
+		return fmt.Sprintf("REV:%s", f.Timestamp.Format(format)), nil
 	}
-	return fmt.Sprintf("REV:%s", f.Timestamp.Format(format))
+	return "", ErrVersion
 }
 
-// Versions implements the FieldFormatter interface
-func (f Rev) Versions() []string {
-	return []string{"2.1", "3.0", "4.0"}
+// Agent type definition to specify information about another person who will
+// act on behalf of the individual or resource associated with the
+// vCard. Can contain a VCard of the agent or a string.
+type Agent struct {
+	VCard *VCard
+	Text  string
+}
+
+// Format implements the FieldFormatter interface
+func (f Agent) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0":
+		if f.VCard != nil {
+			vcard, err := f.VCard.Generate()
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("AGENT:%s", vcard), nil
+		}
+		return fmt.Sprintf("AGENT:%s", f.Text), nil
+	}
+	return "", ErrVersion
+}
+
+// Anniversary type definition to specify a person's anniversary/
+type Anniversary struct {
+	Date       time.Time
+	TimeFormat string
+}
+
+// Format implements the FieldFormatter interface
+func (f Anniversary) Format(v string) (string, error) {
+	switch v {
+	case "4.0":
+		format := dateFormat
+		if f.TimeFormat != "" {
+			format = f.TimeFormat
+		}
+		return fmt.Sprintf("ANNIVERSARY:%s", f.Date.Format(format)), nil
+	}
+	return "", ErrVersion
+}
+
+// Bday type definition to specify the date of birth of the individual associated with the vCard.
+type Bday struct {
+	Timestamp  time.Time
+	TimeFormat string
+}
+
+// Format implements the FieldFormatter interface
+func (f Bday) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0", "4.0":
+		format := dateFormat
+		if f.TimeFormat != "" {
+			format = f.TimeFormat
+		}
+		return fmt.Sprintf("BDAY:%s", f.Timestamp.Format(format)), nil
+	}
+	return "", ErrVersion
+}
+
+// TODO: CLIENTPIDMAP
+
+// FbURL type definition to specify a URL that shows when the person is "free" or "busy" on their calendar.
+type FbURL struct {
+	*url.URL
+}
+
+// Format implements the FieldFormatter interface
+func (f FbURL) Format(v string) (string, error) {
+	switch v {
+	case "4.0":
+		return fmt.Sprintf("FBURL:%s", f.URL), nil
+	}
+	return "", ErrVersion
+}
+
+// Gender type definition to specify a person's gender.
+type Gender struct {
+	Val string
+}
+
+// Format implements the FieldFormatter interface
+func (f Gender) Format(v string) (string, error) {
+	switch v {
+	case "4.0":
+		return fmt.Sprintf("GENDER:%s", f.Val), nil
+	}
+	return "", ErrVersion
+}
+
+// Geo type definition to specify a latitude and longitude.
+// For vcard version 4.0
+type Geo struct {
+	Lat  float64
+	Long float64
+}
+
+// Format implements the FieldFormatter interface
+func (f Geo) Format(v string) (string, error) {
+	switch v {
+	case "2.1", "3.0":
+		return fmt.Sprintf("GEO:%f,%f", f.Lat, f.Long), nil
+	case "4.0":
+		return fmt.Sprintf("GEO:geo:%f,%f", f.Lat, f.Long), nil
+	}
+	return "", ErrVersion
+}
+
+// IMPP type definition to specify instant messenger handle.
+type IMPP struct {
+	Platform string
+	Handle   string
+}
+
+// Format implements the FieldFormatter interface
+func (f IMPP) Format(v string) (string, error) {
+	switch v {
+	case "3.0", "4.0":
+		return fmt.Sprintf("IMPP:%s:%s", strings.ToLower(f.Platform), f.Handle), nil
+	}
+	return "", ErrVersion
 }

@@ -2,7 +2,6 @@ package vcard_test
 
 import (
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -23,7 +22,11 @@ func TestNew(t *testing.T) {
 		t.Fatalf("expected validation to pass, but got %v", err)
 	}
 
-	vcard := v.String()
+	vcard, err := v.Generate()
+	if err != nil {
+		t.Fatalf("expected to pass, but got %v", err)
+	}
+
 	if len(vcard) == 0 {
 		t.Fatalf("length should not be zero")
 	}
@@ -31,19 +34,18 @@ func TestNew(t *testing.T) {
 	if !strings.Contains(vcard, "N:Person") {
 		t.Fatalf("vcard should contain an N field for Test Persom")
 	}
-	t.Log(v)
 }
 
 func TestQRPng(t *testing.T) {
 	filename := "qr.png"
-	defer os.Remove(filename)
+	//defer os.Remove(filename)
 	url, _ := url.Parse("https://www.w3schools.com/w3css/img_avatar3.png")
 	v, err := vcard.New("4.0",
 		vcard.N{FamilyName: "Gump", GivenName: "Forrest", HonorificPrefixes: "Mr"},
 		vcard.FN{"Forrest Gumo"},
 		vcard.Org{Name: "Bubba Gump Shrimp Co."},
 		vcard.Title{"Shrimp man"},
-		vcard.Photo{URL: url},
+		vcard.Photo{URI: url},
 		vcard.Tel{Number: "+1-111-555-1212", Types: []string{vcard.TelWork, vcard.TelVoice}},
 		vcard.Email{Email: "forrest@example.com"},
 		vcard.Rev{Timestamp: time.Now()},

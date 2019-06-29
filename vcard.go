@@ -61,21 +61,21 @@ func (v *VCard) fieldMap() map[reflect.Type]int {
 	return fmap
 }
 
-func (v *VCard) isSupportedField(i int) bool {
-	for _, ver := range v.Fields[i].Versions() {
-		if ver == v.Version {
-			return true
-		}
-	}
+// func (v *VCard) isSupportedField(i int) bool {
+// 	for _, ver := range v.Fields[i].Versions() {
+// 		if ver == v.Version {
+// 			return true
+// 		}
+// 	}
 
-	return false
-}
+// 	return false
+// }
 
 // Validate checks whether a VCard is valid by checking if all required fields are set for the version
 // and if provided fields are supported by the required version
 func (v *VCard) Validate() error {
 	for i := range v.Fields {
-		if !v.isSupportedField(i) {
+		if _, err := v.Fields[i].Format(v.Version); err == ErrVersion {
 			return fmt.Errorf("%T is an unsupported field for vCard version %s", v.Fields[i], v.Version)
 		}
 	}
@@ -89,15 +89,19 @@ func (v *VCard) Validate() error {
 	return nil
 }
 
-// String implements the Stringer interface
-func (v *VCard) String() string {
+// Generate will generate the vcard string
+func (v *VCard) Generate() (string, error) {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "BEGIN:VCARD\nVERSION:%s", v.Version)
 	for i := range v.Fields {
-		fmt.Fprintf(&b, "\n%s", v.Fields[i])
+		o, err := v.Fields[i].Format(v.Version)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(&b, "\n%s", o)
 	}
 	fmt.Fprintf(&b, "\nEND:VCARD")
-	return b.String()
+	return b.String(), nil
 }
 
 // QR creates a QR code of the VCard
@@ -107,7 +111,11 @@ func (v *VCard) QR(x, y int) (barcode.Barcode, error) {
 	}
 
 	// Create the barcode
-	qrCode, err := qr.Encode(v.String(), qr.M, qr.Auto)
+	vcard, err := v.Generate()
+	if err != nil {
+		return nil, err
+	}
+	qrCode, err := qr.Encode(vcard, qr.M, qr.Auto)
 	if err != nil {
 		return nil, err
 	}
